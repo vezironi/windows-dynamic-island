@@ -32,6 +32,13 @@ public partial class Equalizer : UserControl
     /// <summary>Returns the latest band levels, or null when capture is unavailable.</summary>
     public Func<double[]?>? LevelSource { get; set; }
 
+    /// <summary>Freeze the bars at given levels (used by --screenshots).</summary>
+    internal void ShowStaticLevels(double[] levels)
+    {
+        for (var i = 0; i < _scales.Length; i++)
+            _scales[i].ScaleY = MinScale + (1 - MinScale) * Math.Clamp(i < levels.Length ? levels[i] : 0, 0, 1);
+    }
+
     public void SetPlaying(bool playing)
     {
         if (playing == _playing) return;

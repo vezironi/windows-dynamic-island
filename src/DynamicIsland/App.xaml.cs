@@ -31,6 +31,13 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        if (e.Args.Length >= 2 && e.Args[0] == "--screenshots")
+        {
+            ScreenshotRenderer.RenderAll(e.Args[1]);
+            Shutdown();
+            return;
+        }
+
         _single = new Mutex(initiallyOwned: true, "DynamicIsland.SingleInstance", out var isFirst);
         if (!isFirst) { Shutdown(); return; }
 
