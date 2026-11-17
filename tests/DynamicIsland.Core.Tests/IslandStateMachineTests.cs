@@ -317,6 +317,40 @@ public class IslandStateMachineTests
         Assert.Equal(IslandMode.MusicCompact, sm.Mode);
     }
 
+    // ---- Only tuck when a window sits under the island ----
+
+    [Fact]
+    public void TopAreaFree_StaysCompactAfterPeek()
+    {
+        var sm = New();
+        sm.OnTopAreaOccupiedChanged(false, T0);
+        sm.OnMediaChanged(Playing(), T0);
+        sm.Tick(At(10000));
+        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
+    }
+
+    [Fact]
+    public void TopAreaBecomesFree_UntucksImmediately()
+    {
+        var sm = New();
+        sm.OnMediaChanged(Playing(), T0);
+        sm.Tick(At(4100));
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);
+        sm.OnTopAreaOccupiedChanged(false, At(5000));
+        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
+    }
+
+    [Fact]
+    public void TopAreaBecomesOccupied_TucksOncePeekIsOver()
+    {
+        var sm = New();
+        sm.OnTopAreaOccupiedChanged(false, T0);
+        sm.OnMediaChanged(Playing(), T0);
+        sm.Tick(At(10000));
+        sm.OnTopAreaOccupiedChanged(true, At(10000));
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);
+    }
+
     [Fact]
     public void Changed_RaisedOnlyOnActualChange()
     {

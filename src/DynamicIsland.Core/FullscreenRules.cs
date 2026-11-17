@@ -26,7 +26,7 @@ public sealed record ForegroundWindow(string ClassName, PixelRect Bounds, bool I
 
 public static class FullscreenRules
 {
-    private static readonly HashSet<string> ShellClasses = new(StringComparer.Ordinal)
+    internal static readonly HashSet<string> ShellClasses = new(StringComparer.Ordinal)
     {
         "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd",
     };
@@ -56,4 +56,11 @@ public static class FullscreenRules
 
         return fg.Bounds.Contains(monitorOfFg);
     }
+}
+
+public static class TopAreaRules
+{
+    /// <summary>True when any real app window (not desktop, taskbar or our own) overlaps <paramref name="area"/>.</summary>
+    public static bool IsOccupied(IEnumerable<ForegroundWindow> windows, PixelRect area) =>
+        windows.Any(w => !w.IsOwnProcess && !FullscreenRules.ShellClasses.Contains(w.ClassName) && w.Bounds.Intersects(area));
 }

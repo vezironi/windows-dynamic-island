@@ -79,4 +79,30 @@ public class FullscreenRulesTests
     [Fact]
     public void PrimaryCovered_Empty_False() =>
         Assert.False(FullscreenRules.IsMonitorCovered([], Primary));
+
+    // ---- Is anything under the island (top-center of the primary monitor)? ----
+
+    private static readonly PixelRect IslandArea = new(1150, 0, 1410, 40);
+
+    [Fact]
+    public void TopArea_Empty_Free() => Assert.False(TopAreaRules.IsOccupied([], IslandArea));
+
+    [Fact]
+    public void TopArea_DesktopTaskbarAndOwn_Free() =>
+        Assert.False(TopAreaRules.IsOccupied(
+            [Win("WorkerW", Primary), Win("Progman", Primary), Win("Shell_TrayWnd", new PixelRect(0, 0, 2560, 48)),
+             Win("HwndWrapper", new PixelRect(1050, 0, 1510, 140), own: true)], IslandArea));
+
+    [Fact]
+    public void TopArea_MaximizedBrowser_Occupied() =>
+        Assert.True(TopAreaRules.IsOccupied([Win("Chrome_WidgetWin_1", Primary, maximized: true)], IslandArea));
+
+    [Fact]
+    public void TopArea_SmallWindowTouchingTop_Occupied() =>
+        Assert.True(TopAreaRules.IsOccupied([Win("Chrome_WidgetWin_1", new PixelRect(1000, 0, 1800, 900))], IslandArea));
+
+    [Fact]
+    public void TopArea_WindowElsewhere_Free() =>
+        Assert.False(TopAreaRules.IsOccupied(
+            [Win("Notepad", new PixelRect(100, 300, 900, 900)), Win("Discord", new PixelRect(-2560, 0, -100, 1400))], IslandArea));
 }

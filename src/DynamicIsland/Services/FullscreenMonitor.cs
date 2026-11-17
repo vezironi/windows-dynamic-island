@@ -10,7 +10,8 @@ namespace DynamicIsland.Services;
 public sealed class FullscreenMonitor : IDisposable
 {
     private readonly Native.WinEventProc _proc;   // kept in a field so the GC can't collect the callback
-    private IntPtr _hook;
+    private readonly List<IntPtr> _hooks = new();
+    private bool? _topAreaOccupied;
     private DispatcherTimer? _timer;
 
     public FullscreenMonitor() => _proc = (_, _, _, _, _, _, _) => Evaluate();
@@ -18,12 +19,21 @@ public sealed class FullscreenMonitor : IDisposable
     public event Action<bool>? FullscreenChanged;
     public bool IsFullscreen { get; private set; }
 
+    /// <summary>Raised (UI thread) when an app window starts / stops overlapping the island's spot.</summary>
+    public event Action<bool>? TopAreaOccupiedChanged;
+
     /// <summary>Call on the UI thread: the out-of-context WinEvent hook needs its message loop.</summary>
     public void Start()
     {
-        _hook = Native.SetWinEventHook(Native.EVENT_SYSTEM_FOREGROUND, Native.EVENT_SYSTEM_FOREGROUND,
-            IntPtr.Zero, _proc, 0, 0, Native.WINEVENT_OUTOFCONTEXT);
-        _timer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => Evaluate(),
+        foreach (var (min, max) in new[]
+                 {
+                     (Native.EVENT_SYSTEM_FOREGROUND, Native.EVENT_SYSTEM_FOREGROUND),
+                     (Native.EVENT_SYSTEM_MOVESIZEEND, Native.EVENT_SYSTEM_MOVESIZEEND),
+                     (Native.EVENT_SYSTEM_MINIMIZESTART, Native.EVENT_SYSTEM_MINIMIZEEND),
+                 })
+            _hooks.Add(Native.SetWinEventHook(min, max, IntPtr.Zero, _proc, 0, 0, Native.WINEVENT_OUTOFCONTEXT));
+        // Polling also catches maximize/restore, which raises no cheap event.
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(500), DispatcherPriority.Background, (_, _) => Evaluate(),
             Dispatcher.CurrentDispatcher);
         _timer.Start();
         Evaluate();
@@ -31,27 +41,48 @@ public sealed class FullscreenMonitor : IDisposable
 
     private void Evaluate()
     {
-        bool now;
-        try { now = Detect(); }
+        bool fullscreen, occupied;
+        try { (fullscreen, occupied) = Detect(); }
         catch (Exception ex) { Log.Error("FullscreenMonitor", ex); return; }
-        if (now == IsFullscreen) return;
-        IsFullscreen = now;
-        FullscreenChanged?.Invoke(now);
+
+        if (fullscreen != IsFullscreen)
+        {
+            IsFullscreen = fullscreen;
+            FullscreenChanged?.Invoke(fullscreen);
+        }
+        if (occupied != _topAreaOccupied)
+        {
+            _topAreaOccupied = occupied;
+            TopAreaOccupiedChanged?.Invoke(occupied);
+        }
     }
 
-    private static bool Detect()
+    private static (bool Fullscreen, bool TopAreaOccupied) Detect()
     {
         Native.SHQueryUserNotificationState(out var q);
         var quns = (UserNotificationState)q;
 
+        var primaryMon = Native.MonitorFromPoint(default, Native.MONITOR_DEFAULTTOPRIMARY);
+        var primary = MonitorRect(primaryMon);
+        var windows = TopLevelWindowsTopFirst();
+        var occupied = TopAreaRules.IsOccupied(windows, IslandArea(primaryMon, primary));
+
         var hwnd = Native.GetForegroundWindow();
         var fg = hwnd == IntPtr.Zero ? null : Describe(hwnd);
         var fgMonitor = hwnd == IntPtr.Zero ? default : MonitorRect(Native.MonitorFromWindow(hwnd, Native.MONITOR_DEFAULTTONEAREST));
-        if (FullscreenRules.IsFullscreen(quns, fg, fgMonitor)) return true;
+        if (FullscreenRules.IsFullscreen(quns, fg, fgMonitor)) return (true, occupied);
 
         // Focus may be on another monitor while a game / F11 video fills the primary (where the island lives).
-        var primary = MonitorRect(Native.MonitorFromPoint(default, Native.MONITOR_DEFAULTTOPRIMARY));
-        return FullscreenRules.IsMonitorCovered(TopLevelWindowsTopFirst(), primary);
+        return (FullscreenRules.IsMonitorCovered(windows, primary), occupied);
+    }
+
+    /// <summary>The compact island's spot (240×34 DIPs, top-center of the primary monitor) in physical pixels.</summary>
+    private static PixelRect IslandArea(IntPtr monitor, PixelRect bounds)
+    {
+        var scale = Native.GetDpiForMonitor(monitor, 0, out var dpi, out _) == 0 ? dpi / 96.0 : 1.0;
+        var halfWidth = (int)Math.Ceiling(120 * scale);
+        var center = (bounds.Left + bounds.Right) / 2;
+        return new PixelRect(center - halfWidth, bounds.Top, center + halfWidth, bounds.Top + (int)Math.Ceiling(34 * scale));
     }
 
     private static ForegroundWindow Describe(IntPtr hwnd)
@@ -95,7 +126,7 @@ public sealed class FullscreenMonitor : IDisposable
     public void Dispose()
     {
         _timer?.Stop();
-        if (_hook != IntPtr.Zero) Native.UnhookWinEvent(_hook);
-        _hook = IntPtr.Zero;
+        foreach (var h in _hooks) if (h != IntPtr.Zero) Native.UnhookWinEvent(h);
+        _hooks.Clear();
     }
 }

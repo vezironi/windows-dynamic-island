@@ -65,6 +65,7 @@ public partial class App : Application
         };
         _media.MediaChanged += m => { _sm.OnMediaChanged(m, Now()); EnsureTicking(); };
         _fullscreen.FullscreenChanged += f => { _sm.OnFullscreenChanged(f, Now()); EnsureTicking(); };
+        _fullscreen.TopAreaOccupiedChanged += o => { _sm.OnTopAreaOccupiedChanged(o, Now()); EnsureTicking(); };
         _notifications.NotificationArrived += n =>
         {
             if (!_fullscreen.IsFullscreen) _sound.Play();

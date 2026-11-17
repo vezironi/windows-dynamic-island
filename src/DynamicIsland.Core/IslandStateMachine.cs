@@ -17,7 +17,8 @@ public sealed class IslandStateMachine
     private DateTimeOffset? _notifDeadline;     // null while frozen by hover
     private TimeSpan _notifRemaining;
     private bool _fullscreen;
-    private DateTimeOffset? _peekUntil;         // compact island shown until then, tucked line after
+    private DateTimeOffset? _peekUntil;
+    private bool _topAreaOccupied = true;       // assume occupied until the monitor reports         // compact island shown until then, tucked line after
 
     public IslandStateMachine(IslandTimings timings) => _t = timings;
 
@@ -127,6 +128,10 @@ public sealed class IslandStateMachine
         }
     });
 
+    /// <summary>Whether a window sits under the island. Only then does music tuck into the thin line
+    /// (so browser tabs stay clickable); over a free desktop the compact island stays.</summary>
+    public void OnTopAreaOccupiedChanged(bool occupied, DateTimeOffset now) => Apply(now, () => _topAreaOccupied = occupied);
+
     public void Tick(DateTimeOffset now) => Apply(now, () => { });
 
     private void Begin(IslandNotification n, DateTimeOffset now)
@@ -181,7 +186,8 @@ public sealed class IslandStateMachine
         if (CurrentNotification is not null) return IslandMode.Notification;
         if (!MusicVisible(now)) return IslandMode.Hidden;
         if (_expanded) return IslandMode.MusicExpanded;
-        return _peekUntil is { } p && now < p ? IslandMode.MusicCompact : IslandMode.MusicTucked;
+        var peeking = _peekUntil is { } p && now < p;
+        return peeking || !_topAreaOccupied ? IslandMode.MusicCompact : IslandMode.MusicTucked;
     }
 
     private bool MusicVisible(DateTimeOffset now)
