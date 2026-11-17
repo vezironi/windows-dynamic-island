@@ -1,121 +1,122 @@
 using System.IO;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Threading;
-using Windows.Media.Control;
-using Windows.UI.Notifications;
-using Windows.UI.Notifications.Management;
+using DynamicIsland.Core;
+using DynamicIsland.Island;
+using DynamicIsland.Services;
+using DynamicIsland.Shell;
 
 namespace DynamicIsland;
 
-// SPIKE (Task 1) — throwaway. Logs identity, notification access/contents and media info.
 public partial class App : Application
 {
-    private static readonly string LogPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DynamicIsland", "spike.log");
-    private TextBox _box = null!;
-    private readonly HashSet<uint> _seen = new();
+    private static readonly string SettingsPath = Path.Combine(Log.Dir, "settings.json");
 
-    private void Log(string s)
-    {
-        var line = $"{DateTime.Now:HH:mm:ss} {s}";
-        Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-        File.AppendAllText(LogPath, line + Environment.NewLine);
-        Dispatcher.BeginInvoke(() => { _box.AppendText(line + "\n"); _box.ScrollToEnd(); });
-    }
+    private Mutex? _single;
+    private AppSettings _settings = new();
+    private IslandStateMachine _sm = null!;
+    private IslandWindow _window = null!;
+    private MediaService _media = null!;
+    private FullscreenMonitor _fullscreen = null!;
+    private NotificationService _notifications = null!;
+    private NotificationSound _sound = null!;
+    private TrayIcon? _tray;
+    private DispatcherTimer _tick = null!;
+    private OnboardingWindow? _onboarding;
+
+    private static DateTimeOffset Now() => DateTimeOffset.Now;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        _box = new TextBox { IsReadOnly = true, FontFamily = new("Consolas"), VerticalScrollBarVisibility = ScrollBarVisibility.Auto, TextWrapping = TextWrapping.Wrap };
-        var w = new Window { Title = "DynamicIsland spike", Width = 700, Height = 450, Content = _box };
-        w.Closed += (_, _) => Shutdown();
-        w.Show();
 
-        try { Log("Identity: " + global::Windows.ApplicationModel.Package.Current.Id.FullName); }
-        catch (Exception ex) { Log("Identity: NONE (" + ex.GetType().Name + ")"); }
+        _single = new Mutex(initiallyOwned: true, "DynamicIsland.SingleInstance", out var isFirst);
+        if (!isFirst) { Shutdown(); return; }
 
-        try
+        DispatcherUnhandledException += (_, a) => { Log.Error("Dispatcher", a.Exception); a.Handled = true; };
+        AppDomain.CurrentDomain.UnhandledException += (_, a) => Log.Write("FATAL " + a.ExceptionObject);
+        TaskScheduler.UnobservedTaskException += (_, a) => { Log.Error("Task", a.Exception); a.SetObserved(); };
+
+        _settings = AppSettings.Load(SettingsPath);
+        StartupRegistration.Set(_settings.StartWithWindows);
+
+        _sm = new IslandStateMachine(IslandTimings.Default);
+        _media = new MediaService();
+        _fullscreen = new FullscreenMonitor();
+        _notifications = new NotificationService();
+        _sound = new NotificationSound { Enabled = _settings.PlaySound };
+        _window = new IslandWindow(_sm, _media, Now);
+
+        _tick = new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Normal, (_, _) =>
         {
-            var listener = UserNotificationListener.Current;
-            Log("AccessStatus(before): " + listener.GetAccessStatus());
-            var status = await listener.RequestAccessAsync();
-            Log("RequestAccessAsync: " + status);
-            if (status == UserNotificationListenerAccessStatus.Allowed)
-            {
-                var initial = await listener.GetNotificationsAsync(NotificationKinds.Toast);
-                foreach (var n in initial) _seen.Add(n.Id);
-                Log($"Existing toasts at startup: {initial.Count}");
-                try
-                {
-                    listener.NotificationChanged += (_, a) => Log($"EVENT NotificationChanged kind={a.ChangeKind} id={a.UserNotificationId}");
-                    Log("NotificationChanged subscribed OK");
-                }
-                catch (Exception ex) { Log("NotificationChanged subscribe FAILED: " + ex.Message); }
+            _sm.Tick(Now());
+            if (_sm.Mode == IslandMode.Hidden) _tick.Stop();
+        }, Dispatcher);
+        _tick.Stop();
 
-                var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-                t.Tick += async (_, _) =>
-                {
-                    try
-                    {
-                        foreach (var n in await listener.GetNotificationsAsync(NotificationKinds.Toast))
-                        {
-                            if (!_seen.Add(n.Id)) continue;
-                            var texts = n.Notification.Visual.GetBinding(KnownNotificationBindings.ToastGeneric)?.GetTextElements().Select(x => x.Text) ?? [];
-                            Log($"POLL new toast id={n.Id} app='{n.AppInfo.DisplayInfo.DisplayName}' aumid='{n.AppInfo.AppUserModelId}' texts=[{string.Join(" | ", texts)}]");
-                        }
-                    }
-                    catch (Exception ex) { Log("poll error: " + ex.Message); }
-                };
-                t.Start();
-            }
-        }
-        catch (Exception ex) { Log("Listener FAILED: " + ex); }
-
-        try
+        _sm.Changed += _window.Render;
+        _media.MediaChanged += m => { _sm.OnMediaChanged(m, Now()); EnsureTicking(); };
+        _fullscreen.FullscreenChanged += f => { _sm.OnFullscreenChanged(f, Now()); EnsureTicking(); };
+        _notifications.NotificationArrived += n =>
         {
-            var mgr = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
-            async void Dump(string why)
-            {
-                try
-                {
-                    var s = mgr.GetCurrentSession();
-                    if (s is null) { Log($"MEDIA[{why}] no session"); return; }
-                    var p = await s.TryGetMediaPropertiesAsync();
-                    var pb = s.GetPlaybackInfo();
-                    Log($"MEDIA[{why}] src={s.SourceAppUserModelId} '{p.Title}' - '{p.Artist}' status={pb.PlaybackStatus} thumb={(p.Thumbnail != null)}");
-                }
-                catch (Exception ex) { Log("media error: " + ex.Message); }
-            }
-            mgr.CurrentSessionChanged += (_, _) => { Dump("session"); Hook(); };
-            void Hook()
-            {
-                var s = mgr.GetCurrentSession();
-                if (s is null) return;
-                s.MediaPropertiesChanged += (_, _) => Dump("props");
-                s.PlaybackInfoChanged += (_, _) => Dump("playback");
-            }
-            Hook();
-            Dump("start");
-        }
-        catch (Exception ex) { Log("GSMTC FAILED: " + ex); }
-
-        // Task 6 debug: the real adapters
-        var ms = new Services.MediaService();
-        ms.MediaChanged += m => Log("SVC media: " + (m is null ? "null" : $"'{m.Title}' - '{m.Artist}' playing={m.IsPlaying} pos={m.Position:m\\:ss}/{m.Duration:m\\:ss} thumbBytes={m.Thumbnail?.Length}"));
-        await ms.StartAsync(Dispatcher);
-        var fm = new Services.FullscreenMonitor();
-        fm.FullscreenChanged += f => Log("SVC fullscreen=" + f);
-        fm.Start();
-        Log("SVC started");
-
-        // Task 7 debug
-        var ns = new Services.NotificationService();
-        ns.NotificationArrived += n =>
-        {
-            Log($"SVC notif id={n.Id} app='{n.AppName}' aumid='{n.AppUserModelId}' title='{n.Title}' body='{n.Body}' logoBytes={n.AppLogo?.Length}");
-            new Services.NotificationSound().Play();
+            if (!_fullscreen.IsFullscreen) _sound.Play();
+            _sm.OnNotification(n, Now());
+            EnsureTicking();
         };
-        Log("SVC notif access: " + await ns.StartAsync(Dispatcher));
+
+        _tray = new TrayIcon(_settings.StartWithWindows, _settings.PlaySound,
+            onStartWithWindows: on => { UpdateSettings(_settings with { StartWithWindows = on }); StartupRegistration.Set(on); },
+            onPlaySound: on => { UpdateSettings(_settings with { PlaySound = on }); _sound.Enabled = on; },
+            onGuide: ShowOnboarding,
+            onExit: ExitApp);
+
+        _fullscreen.Start();
+        await _media.StartAsync(Dispatcher);
+        var access = await _notifications.StartAsync(Dispatcher);
+        Log.Write($"Started. Notification access: {access}");
+
+        if (!_settings.OnboardingDone || access != NotificationAccess.Allowed) ShowOnboarding();
+    }
+
+    private void EnsureTicking()
+    {
+        if (_sm.Mode != IslandMode.Hidden && !_tick.IsEnabled) _tick.Start();
+    }
+
+    private void UpdateSettings(AppSettings s)
+    {
+        _settings = s;
+        try { s.Save(SettingsPath); }
+        catch (Exception ex) { Log.Error("Settings.Save", ex); }
+    }
+
+    private void ShowOnboarding()
+    {
+        if (_onboarding is not null) { _onboarding.Activate(); return; }
+        _onboarding = new OnboardingWindow(async () => await _notifications.StartAsync(Dispatcher));
+        _onboarding.Closed += (_, _) =>
+        {
+            _onboarding = null;
+            if (!_settings.OnboardingDone) UpdateSettings(_settings with { OnboardingDone = true });
+        };
+        _onboarding.Show();
+        _onboarding.Activate();
+    }
+
+    private void ExitApp()
+    {
+        _tray?.Dispose();
+        _tray = null;
+        _notifications.Dispose();
+        _media.Dispose();
+        _fullscreen.Dispose();
+        Shutdown();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _tray?.Dispose();
+        _single?.Dispose();
+        base.OnExit(e);
     }
 }

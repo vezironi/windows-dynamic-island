@@ -1,0 +1,41 @@
+<Window x:Class="DynamicIsland.Shell.OnboardingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Dynamic Island — Kurulum" Width="520" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        Background="#1C1C1E" FontFamily="{StaticResource IslandFont}">
+    <Window.Resources>
+        <Style x:Key="Step" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#E6E6E6" />
+            <Setter Property="FontSize" Value="13.5" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+    </Window.Resources>
+    <StackPanel Margin="26,22,26,22">
+        <TextBlock Text="Dynamic Island" Foreground="White" FontSize="22" FontWeight="SemiBold" />
+        <TextBlock Margin="0,6,0,18" Foreground="#A0A0A0" FontSize="13.5" TextWrapping="Wrap"
+                   Text="Ekranın üstündeki ada, çalan müziği ve gelen bildirimleri gösterir. Tam ekran bir oyun ya da video açıkken hiç görünmez." />
+
+        <TextBlock Style="{StaticResource Step}" FontWeight="SemiBold" Text="1. Bildirim erişimi" />
+        <TextBlock x:Name="AccessText" Style="{StaticResource Step}" />
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+            <Button x:Name="AllowButton" Content="Bildirim erişimine izin ver" />
+        </StackPanel>
+
+        <TextBlock Style="{StaticResource Step}" FontWeight="SemiBold" Text="2. Windows'un kendi kutucuklarını sustur" />
+        <TextBlock x:Name="SilenceText" Style="{StaticResource Step}" />
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,22">
+            <Button x:Name="SettingsButton" Content="Bildirim ayarlarını aç" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button x:Name="DoneButton" Content="Tamam" IsDefault="True" Margin="0" MinWidth="90" />
+        </StackPanel>
+    </StackPanel>
+</Window>
