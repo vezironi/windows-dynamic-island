@@ -108,5 +108,14 @@ public partial class App : Application
         fm.FullscreenChanged += f => Log("SVC fullscreen=" + f);
         fm.Start();
         Log("SVC started");
+
+        // Task 7 debug
+        var ns = new Services.NotificationService();
+        ns.NotificationArrived += n =>
+        {
+            Log($"SVC notif id={n.Id} app='{n.AppName}' aumid='{n.AppUserModelId}' title='{n.Title}' body='{n.Body}' logoBytes={n.AppLogo?.Length}");
+            new Services.NotificationSound().Play();
+        };
+        Log("SVC notif access: " + await ns.StartAsync(Dispatcher));
     }
 }

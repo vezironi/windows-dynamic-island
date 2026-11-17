@@ -84,6 +84,30 @@ internal static class Native
     [DllImport("shell32.dll")]
     public static extern int SHQueryUserNotificationState(out int state);
 
+    // ---- Shell icons (for Win32 apps that have no package logo) ----
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    public static extern int SHParseDisplayName(string name, IntPtr bindCtx, out IntPtr pidl, uint sfgaoIn, out uint sfgaoOut);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct SHFILEINFO
+    {
+        public IntPtr hIcon; public int iIcon; public uint dwAttributes;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szDisplayName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)] public string szTypeName;
+    }
+
+    public const uint SHGFI_ICON = 0x100, SHGFI_LARGEICON = 0x0, SHGFI_PIDL = 0x8;
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    public static extern IntPtr SHGetFileInfo(IntPtr pidl, uint attrs, ref SHFILEINFO info, uint size, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DestroyIcon(IntPtr hIcon);
+
+    [DllImport("ole32.dll")]
+    public static extern void CoTaskMemFree(IntPtr p);
+
     // ---- App activation ----
     [ComImport, Guid("2e941141-7f97-4756-ba1d-9decde894a3d"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     public interface IApplicationActivationManager
