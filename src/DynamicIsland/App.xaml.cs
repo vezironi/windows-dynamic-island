@@ -20,6 +20,7 @@ public partial class App : Application
     private FullscreenMonitor _fullscreen = null!;
     private NotificationService _notifications = null!;
     private NotificationSound _sound = null!;
+    private AudioLevelService _audio = null!;
     private TrayIcon? _tray;
     private DispatcherTimer _tick = null!;
     private OnboardingWindow? _onboarding;
@@ -45,7 +46,8 @@ public partial class App : Application
         _fullscreen = new FullscreenMonitor();
         _notifications = new NotificationService();
         _sound = new NotificationSound { Enabled = _settings.PlaySound };
-        _window = new IslandWindow(_sm, _media, Now);
+        _audio = new AudioLevelService();
+        _window = new IslandWindow(_sm, _media, _audio, Now);
 
         _tick = new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Normal, (_, _) =>
         {
@@ -55,6 +57,12 @@ public partial class App : Application
         _tick.Stop();
 
         _sm.Changed += _window.Render;
+        _sm.Changed += () =>
+        {
+            // Listen to the speakers only while the compact island (with the equalizer) shows playing music.
+            if (_sm.Mode == IslandMode.MusicCompact && _sm.Media is { IsPlaying: true }) _audio.Start();
+            else _audio.Stop();
+        };
         _media.MediaChanged += m => { _sm.OnMediaChanged(m, Now()); EnsureTicking(); };
         _fullscreen.FullscreenChanged += f => { _sm.OnFullscreenChanged(f, Now()); EnsureTicking(); };
         _notifications.NotificationArrived += n =>
@@ -110,6 +118,7 @@ public partial class App : Application
         _notifications.Dispose();
         _media.Dispose();
         _fullscreen.Dispose();
+        _audio.Dispose();
         Shutdown();
     }
 

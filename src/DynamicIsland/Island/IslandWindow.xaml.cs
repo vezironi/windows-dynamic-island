@@ -29,12 +29,13 @@ public partial class IslandWindow : Window
     private View _wanted = View.None;    // view the state machine asks for
     private object? _shownKey;           // identity of the shown content (e.g. the notification)
 
-    public IslandWindow(IslandStateMachine sm, MediaService media, Func<DateTimeOffset> now)
+    public IslandWindow(IslandStateMachine sm, MediaService media, AudioLevelService audio, Func<DateTimeOffset> now)
     {
         InitializeComponent();
         _sm = sm;
         _now = now;
         ExpandedView.Media = media;
+        CompactView.Eq.LevelSource = audio.TryGetLevels;
         _pointerTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(33), DispatcherPriority.Input, (_, _) => PollPointer(), Dispatcher);
         _pointerTimer.Stop();
 

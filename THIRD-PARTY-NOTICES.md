@@ -1,5 +1,9 @@
 # Third-party notices
 
+## NAudio (NAudio.Wasapi 2.2.1)
+
+Used for WASAPI loopback capture (equalizer levels). MIT License — https://github.com/naudio/NAudio
+
 ## Font Awesome Free 6.5.2
 
 The media control icons (play, pause, forward-step, backward-step) in
