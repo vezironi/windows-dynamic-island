@@ -9,7 +9,6 @@ namespace DynamicIsland.Island;
 
 public partial class MusicExpandedView : UserControl
 {
-    private const string PlayGlyph = "", PauseGlyph = "";
     private readonly DispatcherTimer _progressTimer;
     private MediaInfo? _media;
     private Func<DateTimeOffset> _now = () => DateTimeOffset.Now;
@@ -37,7 +36,7 @@ public partial class MusicExpandedView : UserControl
         var img = Ui.ImageFromBytes(m.Thumbnail);
         Cover.Background = img is null ? null : new ImageBrush(img) { Stretch = Stretch.UniformToFill };
         CoverGlyph.Visibility = img is null ? Visibility.Visible : Visibility.Collapsed;
-        PlayButton.Content = m.IsPlaying ? PauseGlyph : PlayGlyph;
+        PlayIcon.Data = (Geometry)FindResource(m.IsPlaying ? "FaPause" : "FaPlay");
         UpdateProgress();
         SyncTimer();
     }

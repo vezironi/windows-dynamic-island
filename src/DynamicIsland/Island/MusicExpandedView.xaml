@@ -28,9 +28,15 @@
         </StackPanel>
 
         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-            <Button x:Name="PrevButton" Style="{StaticResource IslandIconButton}" Content="&#xE892;" />
-            <Button x:Name="PlayButton" Style="{StaticResource IslandIconButton}" Content="&#xE768;" FontSize="22" Width="42" Height="42" />
-            <Button x:Name="NextButton" Style="{StaticResource IslandIconButton}" Content="&#xE893;" />
+            <Button x:Name="PrevButton" Style="{StaticResource IslandIconButton}">
+                <Path Style="{StaticResource IslandIcon}" Data="{StaticResource FaBackwardStep}" />
+            </Button>
+            <Button x:Name="PlayButton" Style="{StaticResource IslandIconButton}" Width="36" Height="36" Margin="2,0">
+                <Path x:Name="PlayIcon" Style="{StaticResource IslandIcon}" Width="16" Height="16" Data="{StaticResource FaPlay}" />
+            </Button>
+            <Button x:Name="NextButton" Style="{StaticResource IslandIconButton}">
+                <Path Style="{StaticResource IslandIcon}" Data="{StaticResource FaForwardStep}" />
+            </Button>
         </StackPanel>
 
         <Grid Grid.Row="1" Grid.ColumnSpan="3" VerticalAlignment="Center" Margin="0,4,2,0">
