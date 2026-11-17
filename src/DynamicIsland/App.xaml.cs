@@ -99,5 +99,14 @@ public partial class App : Application
             Dump("start");
         }
         catch (Exception ex) { Log("GSMTC FAILED: " + ex); }
+
+        // Task 6 debug: the real adapters
+        var ms = new Services.MediaService();
+        ms.MediaChanged += m => Log("SVC media: " + (m is null ? "null" : $"'{m.Title}' - '{m.Artist}' playing={m.IsPlaying} pos={m.Position:m\\:ss}/{m.Duration:m\\:ss} thumbBytes={m.Thumbnail?.Length}"));
+        await ms.StartAsync(Dispatcher);
+        var fm = new Services.FullscreenMonitor();
+        fm.FullscreenChanged += f => Log("SVC fullscreen=" + f);
+        fm.Start();
+        Log("SVC started");
     }
 }

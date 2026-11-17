@@ -178,3 +178,15 @@ Planın ilk adımı, kod tabanına girmeyecek küçük bir deneme:
 2. **DND açıkken** listener bildirimleri hâlâ görüyor mu?
 3. GSMTC Spotify + tarayıcıdan bilgi/kapak alıyor mu?
 Sonuçlar bu dokümana not edilir; 2. madde başarısızsa 5.3'teki yedek plana geçilir.
+
+## 10. Spike sonuçları (2026-11-17, Windows 11 Pro 10.0.26200)
+- `UserNotificationListener` **paket kimliği olmadan da çalışıyor**: `GetAccessStatus()` = Allowed,
+  `GetNotificationsAsync` mevcut ve yeni bildirimleri döndürüyor (PowerShell ile gönderilen test toast'ı
+  ~1 sn içinde yakalandı). Bu yüzden sparse paket / sertifika varsayılan yoldan çıkarıldı;
+  `packaging/build.ps1 -WithIdentity` yedek olarak duruyor.
+- `NotificationChanged` olayı kimliksiz uygulamada `Element not found (0x80070490)` veriyor →
+  bildirimler 1 sn'lik yoklama ile alınıyor.
+- GSMTC: Brave'deki YouTube videosu için başlık, kanal, oynatma durumu, süre ve kapak (≈28 KB) geldi.
+- Tam ekran: normal büyütülmüş pencere = değil; kenarlıksız ekranı kaplayan pencere = tam ekran;
+  kenarlıksız büyütülmüş pencere = tam ekran (`SHQueryUserNotificationState` yakalıyor).
+- **DND testi henüz yapılmadı** — son uçtan uca kontrolde kullanıcıyla yapılacak.
