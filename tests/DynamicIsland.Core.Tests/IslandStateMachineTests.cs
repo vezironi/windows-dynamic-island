@@ -71,7 +71,7 @@ public class IslandStateMachineTests
         sm.OnMediaChanged(Playing(), T0);
         sm.OnMediaChanged(Paused(), T0);
         sm.Tick(At(4900));
-        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);
         sm.Tick(At(5100));
         Assert.Equal(IslandMode.Hidden, sm.Mode);
     }
@@ -92,7 +92,7 @@ public class IslandStateMachineTests
         sm.OnMediaChanged(Paused(), T0);
         sm.OnMediaChanged(Playing(), At(3000));
         sm.Tick(At(9000));
-        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class IslandStateMachineTests
     }
 
     [Fact]
-    public void Notification_ShowsThenReturnsToCompact()
+    public void Notification_ShowsThenReturnsToMusic()
     {
         var sm = New();
         sm.OnMediaChanged(Playing(), T0);
@@ -133,7 +133,7 @@ public class IslandStateMachineTests
         sm.Tick(At(4900));
         Assert.Equal(IslandMode.Notification, sm.Mode);
         sm.Tick(At(5100));
-        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);   // peek (4s) is over by now
         Assert.Null(sm.CurrentNotification);
     }
 
@@ -233,6 +233,88 @@ public class IslandStateMachineTests
         Assert.Equal("Other", sm.Media!.Title);
         sm.Tick(At(20000));
         Assert.Null(sm.CurrentNotification);
+    }
+
+    // ---- Tucked: thin line at the top so browser tabs stay clickable ----
+
+    [Fact]
+    public void PlayStart_PeeksThenTucks()
+    {
+        var sm = New();
+        sm.OnMediaChanged(Playing(), T0);
+        sm.Tick(At(3900));
+        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
+        sm.Tick(At(4100));
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);
+    }
+
+    [Fact]
+    public void TrackChange_PeeksAgain()
+    {
+        var sm = New();
+        sm.OnMediaChanged(Playing("A"), T0);
+        sm.Tick(At(5000));
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);
+        sm.OnMediaChanged(Playing("B"), At(6000));
+        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
+        sm.Tick(At(10100));
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);
+    }
+
+    [Fact]
+    public void SameTrackUpdate_DoesNotPeek()
+    {
+        var sm = New();
+        sm.OnMediaChanged(Playing("A"), T0);
+        sm.Tick(At(5000));
+        sm.OnMediaChanged(Playing("A") with { Position = TimeSpan.FromSeconds(42) }, At(6000));
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);
+    }
+
+    [Fact]
+    public void Resume_Peeks()
+    {
+        var sm = New();
+        sm.OnMediaChanged(Playing(), T0);
+        sm.Tick(At(4100));
+        sm.OnMediaChanged(Paused(), At(4200));
+        sm.OnMediaChanged(Playing(), At(4500));
+        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
+    }
+
+    [Fact]
+    public void HoverOnTucked_Expands_LeaveReturnsToTucked()
+    {
+        var sm = New();
+        sm.OnMediaChanged(Playing(), T0);
+        sm.Tick(At(4100));
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);
+        sm.OnPointerEnter(At(5000));
+        sm.Tick(At(5300));
+        Assert.Equal(IslandMode.MusicExpanded, sm.Mode);
+        sm.OnPointerLeave(At(6000));
+        sm.Tick(At(6600));
+        Assert.Equal(IslandMode.MusicTucked, sm.Mode);
+    }
+
+    [Fact]
+    public void ClickOnTucked_Expands()
+    {
+        var sm = New();
+        sm.OnMediaChanged(Playing(), T0);
+        sm.Tick(At(4100));
+        sm.OnPointerEnter(At(5000));
+        Assert.Null(sm.OnClick(At(5050)));
+        Assert.Equal(IslandMode.MusicExpanded, sm.Mode);
+    }
+
+    [Fact]
+    public void FirstSeenPlaying_AfterPausedStart_Peeks()
+    {
+        var sm = New();
+        sm.OnMediaChanged(Paused(), T0);
+        sm.OnMediaChanged(Playing(), At(1000));
+        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
     }
 
     [Fact]

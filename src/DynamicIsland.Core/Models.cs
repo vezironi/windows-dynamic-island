@@ -1,6 +1,6 @@
 namespace DynamicIsland.Core;
 
-public enum IslandMode { Hidden, MusicCompact, MusicExpanded, Notification }
+public enum IslandMode { Hidden, MusicTucked, MusicCompact, MusicExpanded, Notification }
 
 public sealed record MediaInfo(
     string Title,
@@ -23,11 +23,13 @@ public sealed record IslandTimings(
     TimeSpan HoverDelay,
     TimeSpan CollapseDelay,
     TimeSpan PausedHide,
-    TimeSpan NotificationDuration)
+    TimeSpan NotificationDuration,
+    TimeSpan PeekDuration)
 {
     public static IslandTimings Default { get; } = new(
         TimeSpan.FromMilliseconds(250),
         TimeSpan.FromMilliseconds(500),
         TimeSpan.FromSeconds(5),
-        TimeSpan.FromSeconds(5));
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(4));
 }

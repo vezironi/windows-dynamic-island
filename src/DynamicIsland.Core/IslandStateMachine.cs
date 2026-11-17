@@ -17,6 +17,7 @@ public sealed class IslandStateMachine
     private DateTimeOffset? _notifDeadline;     // null while frozen by hover
     private TimeSpan _notifRemaining;
     private bool _fullscreen;
+    private DateTimeOffset? _peekUntil;         // compact island shown until then, tucked line after
 
     public IslandStateMachine(IslandTimings timings) => _t = timings;
 
@@ -30,12 +31,18 @@ public sealed class IslandStateMachine
 
     public void OnMediaChanged(MediaInfo? media, DateTimeOffset now) => Apply(now, () =>
     {
-        var wasPlaying = Media?.IsPlaying ?? false;
-        var hadMedia = Media is not null;
+        var previous = Media;
+        var wasPlaying = previous?.IsPlaying ?? false;
+        var hadMedia = previous is not null;
         Media = media;
+        var trackChanged = previous is not null && media is not null &&
+                           (previous.Title != media.Title || previous.Artist != media.Artist);
+        if (media is { IsPlaying: true } && (!wasPlaying || trackChanged))
+            _peekUntil = now + _t.PeekDuration;  // started, resumed or new track: show compact briefly
         if (media is null)
         {
             _pausedAt = null;
+            _peekUntil = null;
             _expanded = false;
             _collapseAt = null;
         }
@@ -98,7 +105,7 @@ public sealed class IslandStateMachine
                 _collapseAt = null;
                 _hoverStart = null;
             }
-            else if (Mode == IslandMode.MusicCompact)
+            else if (Mode is IslandMode.MusicCompact or IslandMode.MusicTucked)
             {
                 _expanded = true;
                 _collapseAt = null;
@@ -173,7 +180,8 @@ public sealed class IslandStateMachine
         if (_fullscreen) return IslandMode.Hidden;
         if (CurrentNotification is not null) return IslandMode.Notification;
         if (!MusicVisible(now)) return IslandMode.Hidden;
-        return _expanded ? IslandMode.MusicExpanded : IslandMode.MusicCompact;
+        if (_expanded) return IslandMode.MusicExpanded;
+        return _peekUntil is { } p && now < p ? IslandMode.MusicCompact : IslandMode.MusicTucked;
     }
 
     private bool MusicVisible(DateTimeOffset now)

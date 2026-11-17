@@ -13,7 +13,7 @@ public partial class IslandWindow : Window
 {
     private const double Flare = 10;
 
-    private enum View { None, Compact, Expanded, Notification }
+    private enum View { None, Tucked, Compact, Expanded, Notification }
 
     private readonly IslandStateMachine _sm;
     private readonly Func<DateTimeOffset> _now;
@@ -66,6 +66,7 @@ public partial class IslandWindow : Window
     {
         var (view, w, h) = _sm.Mode switch
         {
+            IslandMode.MusicTucked => (View.Tucked, 80.0, 5.0),   // thin line: browser tabs stay clickable
             IslandMode.MusicCompact => (View.Compact, 220.0, 34.0),
             IslandMode.MusicExpanded => (View.Expanded, 420.0, 110.0),
             IslandMode.Notification => (View.Notification, 400.0, 80.0),
@@ -101,7 +102,7 @@ public partial class IslandWindow : Window
         if (view == _shown && Equals(key, _shownKey))
         {
             UpdateShownContent();          // same view: refresh data in place, no fade
-            _opacity.Target = view == View.None ? 0 : 1;
+            _opacity.Target = ViewHasContent(view) ? 1 : 0;
         }
         else
         {
@@ -120,8 +121,13 @@ public partial class IslandWindow : Window
         ExpandedView.Visibility = _shown == View.Expanded ? Visibility.Visible : Visibility.Collapsed;
         NotifView.Visibility = _shown == View.Notification ? Visibility.Visible : Visibility.Collapsed;
         UpdateShownContent();
-        _opacity.Target = _shown == View.None ? 0 : 1;
+        _opacity.Target = ViewHasContent(_shown) ? 1 : 0;
     }
+
+    private static bool ViewHasContent(View v) => v is View.Compact or View.Expanded or View.Notification;
+
+    /// <summary>The concave top flare can't be taller than the island itself (matters for the thin line).</summary>
+    private static double FlareFor(double h) => Math.Clamp(h / 2, 0, Flare);
 
     private void UpdateShownContent()
     {
@@ -171,7 +177,9 @@ public partial class IslandWindow : Window
     {
         var bw = Math.Max(0, _w.Value);
         var h = Math.Max(0, _h.Value);
-        IslandRoot.Width = bw + 2 * Flare;
+        var f = FlareFor(h);
+        IslandRoot.Width = bw + 2 * f;
+        ContentHost.Margin = new Thickness(f, 0, f, 0);
         IslandRoot.Height = Math.Max(0, h);
         if (h < 1)
         {
@@ -181,7 +189,7 @@ public partial class IslandWindow : Window
         else
         {
             var r = h <= 40 ? h / 2 : 22;
-            var g = Geometry.Parse(NotchGeometry.BuildPathData(bw, h, Flare, r));
+            var g = Geometry.Parse(NotchGeometry.BuildPathData(bw, h, f, r));
             g.Freeze();
             NotchPath.Data = g;
             ContentHost.Clip = new RectangleGeometry(new Rect(0, 0, bw, h), Math.Min(r, bw / 2), Math.Min(r, h / 2));
@@ -211,7 +219,8 @@ public partial class IslandWindow : Window
         if (!IsVisible || _hwnd == IntPtr.Zero) return;
         if (!Native.GetCursorPos(out var p)) return;
         var local = IslandRoot.PointFromScreen(new Point(p.X, p.Y));
-        var inside = local.X >= Flare && local.X <= Flare + _w.Value && local.Y >= 0 && local.Y <= Math.Max(_h.Value, 0)
+        var f = FlareFor(_h.Value);
+        var inside = local.X >= f && local.X <= f + _w.Value && local.Y >= 0 && local.Y <= Math.Max(_h.Value, 0)
                      && _wanted != View.None;
 
         SetClickThrough(!inside);
