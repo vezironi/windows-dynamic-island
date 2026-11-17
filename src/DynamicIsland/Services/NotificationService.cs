@@ -17,6 +17,7 @@ public sealed class NotificationService : IDisposable
     private readonly SeenNotifications _seen = new();
     private readonly Dictionary<string, byte[]?> _logoCache = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? _cts;
+    private bool _seeded;
     private Dispatcher _ui = null!;
 
     public event Action<IslandNotification>? NotificationArrived;
@@ -50,13 +51,7 @@ public sealed class NotificationService : IDisposable
         if (access != NotificationAccess.Allowed) return access;
         if (_cts is not null) return access; // already running
 
-        try
-        {
-            var existing = await UserNotificationListener.Current.GetNotificationsAsync(NotificationKinds.Toast);
-            _seen.Seed(existing.Select(n => n.Id.ToString()));
-        }
-        catch (Exception ex) { Log.Error("Notifications.Seed", ex); return NotificationAccess.Error; }
-
+        _seeded = await TrySeedAsync();
         _cts = new CancellationTokenSource();
         _ = PollLoopAsync(_cts.Token);
         return access;
@@ -69,6 +64,8 @@ public sealed class NotificationService : IDisposable
         {
             while (await timer.WaitForNextTickAsync(ct))
             {
+                // Seeding can fail right after login (platform not ready): keep retrying, never replay.
+                if (!_seeded) { _seeded = await TrySeedAsync(); continue; }
                 try { await PollOnceAsync(); }
                 catch (Exception ex) { Log.Error("Notifications.Poll", ex); }
             }
@@ -76,13 +73,25 @@ public sealed class NotificationService : IDisposable
         catch (OperationCanceledException) { }
     }
 
+    private async Task<bool> TrySeedAsync()
+    {
+        try
+        {
+            var existing = await UserNotificationListener.Current.GetNotificationsAsync(NotificationKinds.Toast);
+            _seen.Seed(existing.Select(n => n.Id.ToString()));
+            return true;
+        }
+        catch (Exception ex) { Log.Error("Notifications.Seed", ex); return false; }
+    }
+
     private async Task PollOnceAsync()
     {
         var list = await UserNotificationListener.Current.GetNotificationsAsync(NotificationKinds.Toast);
-        foreach (var un in list.OrderBy(n => n.CreationTime))
+        var fresh = list.Where(n => _seen.MarkIfNew(n.Id.ToString())).OrderBy(n => n.CreationTime).ToList();
+        _seen.Retain(list.Select(n => n.Id.ToString()));
+        foreach (var un in fresh)
         {
             var id = un.Id.ToString();
-            if (!_seen.MarkIfNew(id)) continue;
 
             var binding = un.Notification?.Visual?.GetBinding(KnownNotificationBindings.ToastGeneric);
             if (binding is null) continue;

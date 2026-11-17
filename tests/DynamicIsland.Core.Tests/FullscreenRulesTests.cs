@@ -47,4 +47,36 @@ public class FullscreenRulesTests
     public void SecondMonitorWindowCoveringItsMonitor_True() =>
         Assert.True(FullscreenRules.IsFullscreen(UserNotificationState.AcceptsNotifications,
             Win("UnityWndClass", new PixelRect(1920, 0, 4480, 1440)), new PixelRect(1920, 0, 4480, 1440)));
+
+    // ---- Primary monitor covered while focus is on another monitor ----
+
+    private static readonly PixelRect Primary = new(0, 0, 2560, 1440);
+
+    [Fact]
+    public void PrimaryCovered_GameOnTop_True() =>
+        Assert.True(FullscreenRules.IsMonitorCovered([Win("UnityWndClass", Primary)], Primary));
+
+    [Fact]
+    public void PrimaryCovered_NormalWindowOnTop_False() =>
+        Assert.False(FullscreenRules.IsMonitorCovered(
+            [Win("Notepad", new PixelRect(100, 100, 900, 700)), Win("UnityWndClass", Primary)], Primary));
+
+    [Fact]
+    public void PrimaryCovered_SkipsTaskbarAndOwnWindow() =>
+        Assert.True(FullscreenRules.IsMonitorCovered(
+            [Win("Shell_TrayWnd", new PixelRect(0, 1392, 2560, 1440)), Win("HwndWrapper", new PixelRect(1050, 0, 1510, 140), own: true),
+             Win("Chrome_WidgetWin_1", Primary)], Primary));
+
+    [Fact]
+    public void PrimaryCovered_MaximizedBrowser_False() =>
+        Assert.False(FullscreenRules.IsMonitorCovered([Win("Chrome_WidgetWin_1", Primary, maximized: true)], Primary));
+
+    [Fact]
+    public void PrimaryCovered_WindowsOnOtherMonitorIgnored() =>
+        Assert.True(FullscreenRules.IsMonitorCovered(
+            [Win("Discord", new PixelRect(-2560, 0, -1200, 900)), Win("UnityWndClass", Primary)], Primary));
+
+    [Fact]
+    public void PrimaryCovered_Empty_False() =>
+        Assert.False(FullscreenRules.IsMonitorCovered([], Primary));
 }

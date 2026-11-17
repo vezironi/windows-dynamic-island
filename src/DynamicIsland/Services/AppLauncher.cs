@@ -17,6 +17,10 @@ public static class AppLauncher
         }
         catch (Exception ex) { Log.Write($"AppLauncher COM failed for {aumid}: {ex.Message}"); }
 
+        // Only hand to Explorer if the AUMID resolves; otherwise Explorer opens a random folder window.
+        if (Native.SHParseDisplayName($"shell:AppsFolder\\{aumid}", IntPtr.Zero, out var pidl, 0, out _) != 0) return false;
+        Native.CoTaskMemFree(pidl);
+
         try
         {
             // Win32 apps whose Start-menu shortcut carries this AUMID (Discord, Chrome, ...).

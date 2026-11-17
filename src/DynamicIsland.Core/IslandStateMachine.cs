@@ -21,6 +21,7 @@ public sealed class IslandStateMachine
     public IslandStateMachine(IslandTimings timings) => _t = timings;
 
     public IslandMode Mode { get; private set; } = IslandMode.Hidden;
+    public bool IsFullscreen => _fullscreen;
     public MediaInfo? Media { get; private set; }
     public IslandNotification? CurrentNotification { get; private set; }
 
@@ -91,6 +92,11 @@ public sealed class IslandStateMachine
             {
                 clicked = CurrentNotification;
                 Advance(now);
+                // The island "closes" back to its base state; don't let the hover that led to
+                // the click expand the music view until the pointer leaves and comes back.
+                _expanded = false;
+                _collapseAt = null;
+                _hoverStart = null;
             }
             else if (Mode == IslandMode.MusicCompact)
             {

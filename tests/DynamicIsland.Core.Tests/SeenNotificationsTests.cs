@@ -23,11 +23,24 @@ public class SeenNotificationsTests
     }
 
     [Fact]
-    public void Capacity_EvictsOldest()
+    public void ManyPresent_NoReplay()
     {
         var s = new SeenNotifications();
-        for (var i = 0; i < 501; i++) s.MarkIfNew(i.ToString());
-        Assert.True(s.MarkIfNew("0"));
-        Assert.False(s.MarkIfNew("500"));
+        var ids = Enumerable.Range(0, 600).Select(i => i.ToString()).ToList();
+        s.Seed(ids);
+        Assert.All(ids, id => Assert.False(s.MarkIfNew(id)));
+        s.Retain(ids);
+        Assert.All(ids, id => Assert.False(s.MarkIfNew(id)));
+    }
+
+    [Fact]
+    public void Retain_ForgetsIdsNoLongerPresent()
+    {
+        var s = new SeenNotifications();
+        s.MarkIfNew("a");
+        s.MarkIfNew("b");
+        s.Retain(["b"]);
+        Assert.True(s.MarkIfNew("a"));
+        Assert.False(s.MarkIfNew("b"));
     }
 }

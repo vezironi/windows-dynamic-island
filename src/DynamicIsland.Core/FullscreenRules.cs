@@ -14,6 +14,9 @@ public enum UserNotificationState
 
 public readonly record struct PixelRect(int Left, int Top, int Right, int Bottom)
 {
+    public bool Intersects(PixelRect o) =>
+        Left < o.Right && o.Left < Right && Top < o.Bottom && o.Top < Bottom;
+
     public bool Contains(PixelRect o) =>
         Left <= o.Left && Top <= o.Top && Right >= o.Right && Bottom >= o.Bottom;
 }
@@ -27,6 +30,20 @@ public static class FullscreenRules
     {
         "Progman", "WorkerW", "Shell_TrayWnd", "Shell_SecondaryTrayWnd",
     };
+
+    /// <summary>
+    /// True when the top-most real window on <paramref name="monitor"/> (z-order, top first) is a
+    /// fullscreen one — catches a game on the primary monitor while focus is on another monitor.
+    /// </summary>
+    public static bool IsMonitorCovered(IEnumerable<ForegroundWindow> zOrder, PixelRect monitor)
+    {
+        foreach (var w in zOrder)
+        {
+            if (w.IsOwnProcess || ShellClasses.Contains(w.ClassName) || !w.Bounds.Intersects(monitor)) continue;
+            return !w.IsMaximized && w.Bounds.Contains(monitor);
+        }
+        return false;
+    }
 
     public static bool IsFullscreen(UserNotificationState quns, ForegroundWindow? fg, PixelRect monitorOfFg)
     {

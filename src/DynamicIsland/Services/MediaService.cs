@@ -14,6 +14,7 @@ public sealed class MediaService : IDisposable
     private Dispatcher _ui = null!;
     private DispatcherTimer? _debounce;
     private bool _propsDirty = true;
+    private int _generation;   // bumps on every publish; stale async runs drop their results
 
     // Cached media properties so playback/timeline updates don't re-read the thumbnail.
     private string _title = "", _artist = "";
@@ -71,6 +72,7 @@ public sealed class MediaService : IDisposable
 
     private async Task PublishAsync()
     {
+        var gen = ++_generation;
         var s = _session;
         if (s is null) { MediaChanged?.Invoke(null); return; }
         try
@@ -79,11 +81,17 @@ public sealed class MediaService : IDisposable
             {
                 _propsDirty = false;
                 var p = await s.TryGetMediaPropertiesAsync();
+                var thumb = p?.Thumbnail is { } t ? await ReadThumbAsync(t) : null;
+                if (gen != _generation || !ReferenceEquals(s, _session))
+                {
+                    _propsDirty = true;   // a newer publish is running / will run; let it re-read
+                    return;
+                }
                 _title = p?.Title ?? "";
                 _artist = p?.Artist ?? "";
-                _thumb = p?.Thumbnail is { } t ? await ReadThumbAsync(t) : null;
+                _thumb = thumb;
             }
-            if (!ReferenceEquals(s, _session)) return; // session switched while awaiting
+            if (gen != _generation || !ReferenceEquals(s, _session)) return;
 
             if (string.IsNullOrWhiteSpace(_title)) { MediaChanged?.Invoke(null); return; }
 

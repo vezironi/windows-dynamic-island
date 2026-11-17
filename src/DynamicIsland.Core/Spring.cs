@@ -22,6 +22,13 @@ public sealed class Spring
 
     public bool IsSettled => Math.Abs(Target - Value) < Epsilon && Math.Abs(Velocity) < Epsilon;
 
+    /// <summary>Jump straight to the target (no animation).</summary>
+    public void Snap()
+    {
+        Value = Target;
+        Velocity = 0;
+    }
+
     public void Step(double dtSeconds)
     {
         if (dtSeconds <= 0) return;

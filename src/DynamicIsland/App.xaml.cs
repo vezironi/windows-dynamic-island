@@ -105,6 +105,7 @@ public partial class App : Application
         _onboarding.Closed += (_, _) =>
         {
             _onboarding = null;
+            _ = _notifications.StartAsync(Dispatcher);   // user may have granted access in Settings
             if (!_settings.OnboardingDone) UpdateSettings(_settings with { OnboardingDone = true });
         };
         _onboarding.Show();

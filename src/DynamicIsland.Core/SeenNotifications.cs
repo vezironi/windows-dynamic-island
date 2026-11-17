@@ -1,24 +1,20 @@
 namespace DynamicIsland.Core;
 
-/// <summary>Remembers notification ids so each one is shown at most once (bounded, FIFO eviction).</summary>
+/// <summary>
+/// Remembers notification ids so each one is shown at most once. Ids are forgotten only when they
+/// leave the notification center (<see cref="Retain"/>) — never while still present, so a large
+/// backlog can't be replayed.
+/// </summary>
 public sealed class SeenNotifications
 {
-    private const int Capacity = 500;
     private readonly HashSet<string> _set = new(StringComparer.Ordinal);
-    private readonly Queue<string> _order = new();
 
     /// <summary>Ids present at startup: they are never shown.</summary>
-    public void Seed(IEnumerable<string> existingIds)
-    {
-        foreach (var id in existingIds) MarkIfNew(id);
-    }
+    public void Seed(IEnumerable<string> existingIds) => _set.UnionWith(existingIds);
+
+    /// <summary>Forget ids that are no longer in the notification center.</summary>
+    public void Retain(IEnumerable<string> presentIds) => _set.IntersectWith(presentIds);
 
     /// <summary>True only the first time an id is seen.</summary>
-    public bool MarkIfNew(string id)
-    {
-        if (!_set.Add(id)) return false;
-        _order.Enqueue(id);
-        if (_order.Count > Capacity) _set.Remove(_order.Dequeue());
-        return true;
-    }
+    public bool MarkIfNew(string id) => _set.Add(id);
 }

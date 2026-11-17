@@ -74,6 +74,18 @@ public partial class IslandWindow : Window
         _w.Target = w;
         _h.Target = h;
 
+        if (_sm.IsFullscreen)
+        {
+            // Spec: hide instantly over a fullscreen app — no shrink animation over the game.
+            _wanted = View.None;
+            _w.Snap(); _h.Snap(); _opacity.Target = 0; _opacity.Snap();
+            SwapContent();
+            ApplyFrame();
+            if (_animating) { CompositionTarget.Rendering -= OnRendering; _animating = false; }
+            HideIsland();
+            return;
+        }
+
         if (view != View.None && !IsVisible)
         {
             Position();

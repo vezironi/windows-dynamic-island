@@ -189,6 +189,32 @@ public class IslandStateMachineTests
     }
 
     [Fact]
+    public void Click_OnNotification_AfterHover_DoesNotExpandMusic()
+    {
+        var sm = New();
+        sm.OnMediaChanged(Playing(), T0);
+        sm.OnNotification(Notif("1"), T0);
+        sm.OnPointerEnter(At(100));
+        sm.Tick(At(500));
+        Assert.Equal(IslandMode.Notification, sm.Mode);
+        sm.OnClick(At(600));
+        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
+        sm.Tick(At(2000));
+        Assert.Equal(IslandMode.MusicCompact, sm.Mode);
+    }
+
+    [Fact]
+    public void IsFullscreen_ReflectsLastSignal()
+    {
+        var sm = New();
+        Assert.False(sm.IsFullscreen);
+        sm.OnFullscreenChanged(true, T0);
+        Assert.True(sm.IsFullscreen);
+        sm.OnFullscreenChanged(false, T0);
+        Assert.False(sm.IsFullscreen);
+    }
+
+    [Fact]
     public void Fullscreen_HidesEverything_DropsQueue_IgnoresNew()
     {
         var sm = New();

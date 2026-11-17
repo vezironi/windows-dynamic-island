@@ -45,27 +45,51 @@ public sealed class FullscreenMonitor : IDisposable
         var quns = (UserNotificationState)q;
 
         var hwnd = Native.GetForegroundWindow();
-        if (hwnd == IntPtr.Zero) return FullscreenRules.IsFullscreen(quns, null, default);
+        var fg = hwnd == IntPtr.Zero ? null : Describe(hwnd);
+        var fgMonitor = hwnd == IntPtr.Zero ? default : MonitorRect(Native.MonitorFromWindow(hwnd, Native.MONITOR_DEFAULTTONEAREST));
+        if (FullscreenRules.IsFullscreen(quns, fg, fgMonitor)) return true;
 
+        // Focus may be on another monitor while a game / F11 video fills the primary (where the island lives).
+        var primary = MonitorRect(Native.MonitorFromPoint(default, Native.MONITOR_DEFAULTTOPRIMARY));
+        return FullscreenRules.IsMonitorCovered(TopLevelWindowsTopFirst(), primary);
+    }
+
+    private static ForegroundWindow Describe(IntPtr hwnd)
+    {
         var cls = new StringBuilder(256);
         Native.GetClassName(hwnd, cls, cls.Capacity);
-
-        if (Native.DwmGetWindowAttribute(hwnd, Native.DWMWA_EXTENDED_FRAME_BOUNDS, out var r,
+        if (Native.DwmGetWindowAttribute(hwnd, Native.DWMWA_EXTENDED_FRAME_BOUNDS, out Native.RECT r,
                 Marshal.SizeOf<Native.RECT>()) != 0)
             Native.GetWindowRect(hwnd, out r);
-
         Native.GetWindowThreadProcessId(hwnd, out var pid);
+        return new ForegroundWindow(cls.ToString(), new PixelRect(r.Left, r.Top, r.Right, r.Bottom),
+            Native.IsZoomed(hwnd), pid == (uint)Environment.ProcessId);
+    }
 
-        var mon = Native.MonitorFromWindow(hwnd, Native.MONITOR_DEFAULTTONEAREST);
+    private static PixelRect MonitorRect(IntPtr mon)
+    {
         var mi = new Native.MONITORINFO { cbSize = Marshal.SizeOf<Native.MONITORINFO>() };
         Native.GetMonitorInfo(mon, ref mi);
+        return new PixelRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom);
+    }
 
-        var fg = new ForegroundWindow(cls.ToString(),
-            new PixelRect(r.Left, r.Top, r.Right, r.Bottom),
-            Native.IsZoomed(hwnd),
-            pid == (uint)Environment.ProcessId);
-        var monitor = new PixelRect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right, mi.rcMonitor.Bottom);
-        return FullscreenRules.IsFullscreen(quns, fg, monitor);
+    /// <summary>Visible, real top-level windows in z-order (top first). Skips minimized, cloaked
+    /// (other virtual desktops / suspended UWP), tool and click-through overlay windows.</summary>
+    private static List<ForegroundWindow> TopLevelWindowsTopFirst()
+    {
+        var list = new List<ForegroundWindow>();
+        Native.EnumWindows((h, _) =>
+        {
+            if (!Native.IsWindowVisible(h) || Native.IsIconic(h)) return true;
+            var ex = (long)Native.GetWindowLongPtr(h, Native.GWL_EXSTYLE);
+            if ((ex & (Native.WS_EX_TOOLWINDOW | Native.WS_EX_TRANSPARENT)) != 0) return true;
+            if (Native.DwmGetWindowAttribute(h, Native.DWMWA_CLOAKED, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
+            var w = Describe(h);
+            if (w.Bounds.Right <= w.Bounds.Left || w.Bounds.Bottom <= w.Bounds.Top) return true;
+            list.Add(w);
+            return list.Count < 64;   // the answer is always among the top few
+        }, IntPtr.Zero);
+        return list;
     }
 
     public void Dispose()

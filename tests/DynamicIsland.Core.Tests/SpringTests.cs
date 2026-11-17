@@ -37,4 +37,15 @@ public class SpringTests
         var s = new Spring(42) { Target = 42 };
         Assert.True(s.IsSettled);
     }
+
+    [Fact]
+    public void Snap_JumpsToTarget_AndSettles()
+    {
+        var s = new Spring(0) { Target = 100 };
+        s.Step(1.0 / 60);
+        s.Snap();
+        Assert.Equal(100, s.Value);
+        Assert.Equal(0, s.Velocity);
+        Assert.True(s.IsSettled);
+    }
 }
